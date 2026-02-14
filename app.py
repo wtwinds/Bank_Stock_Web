@@ -14,7 +14,7 @@ app.bank_db=config.bank_db
 # register blueprint
 app.register_blueprint(bank_bp)
 app.register_blueprint(stock_bp)
-app.register_blueprint(tambola_bp)
+
 
 @app.route("/")
 def home():
