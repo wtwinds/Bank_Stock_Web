@@ -1,7 +1,6 @@
 from flask import Flask, render_template
 from bank_app import bank_bp
 from stock_app import stock_bp
-from tambola_app import tambola_bp
 import config
 
 app = Flask(__name__)
