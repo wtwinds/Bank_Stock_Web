@@ -1,0 +1,21 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Static large files
+static/images/
+static/sector_images/
+
+# Archives & media
+*.zip
+*.mp4
+*.pdf
+*.csv
+
+# OS
+.DS_Store
+Thumbs.db
