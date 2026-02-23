@@ -229,45 +229,50 @@ def api_pay():
 
     username = data.get("username")
     amount = float(data.get("amount"))
+    merchant = data.get("merchant", "ADMIN")  # DEFAULT ADMIN
 
     bank_db = current_app.bank_db
 
+    # buyer
     user = bank_db.users.find_one({"login_id": username})
-    admin = bank_db.users.find_one({"role": "ADMIN"})
+
+    # merchant wallet
+    merchant_user = bank_db.users.find_one({"login_id": merchant})
 
     if not user:
         return jsonify({"status": "error", "msg": "User not found"})
 
+    if not merchant_user:
+        return jsonify({"status": "error", "msg": f"{merchant} wallet not found"})
+
     if user["balance"] < amount:
         return jsonify({"status": "error", "msg": "Insufficient balance"})
 
-    # debit user
+    # debit buyer
     bank_db.users.update_one(
         {"_id": user["_id"]},
         {"$inc": {"balance": -amount}}
     )
 
-    # credit admin
+    # credit merchant
     bank_db.users.update_one(
-        {"_id": admin["_id"]},
+        {"_id": merchant_user["_id"]},
         {"$inc": {"balance": amount}}
     )
-
-    from datetime import datetime
 
     bank_db.transactions.insert_many([
         {
             "user_id": user["_id"],
             "amount": amount,
             "type": "DEBIT",
-            "role": "SHOP",
+            "role": f"PAY_{merchant}",
             "created_at": datetime.utcnow()
         },
         {
-            "user_id": admin["_id"],
+            "user_id": merchant_user["_id"],
             "amount": amount,
             "type": "CREDIT",
-            "role": "SHOP",
+            "role": f"RECEIVE_{merchant}",
             "created_at": datetime.utcnow()
         }
     ])
