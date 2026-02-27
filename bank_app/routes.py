@@ -265,14 +265,14 @@ def api_pay():
             "user_id": user["_id"],
             "amount": amount,
             "type": "DEBIT",
-            "role": f"PAY_{merchant}",
+            "role": "DEBIT_PURCHASE",
             "created_at": datetime.utcnow()
         },
         {
             "user_id": merchant_user["_id"],
             "amount": amount,
             "type": "CREDIT",
-            "role": f"RECEIVE_{merchant}",
+            "role": "CREDIT_SALE",
             "created_at": datetime.utcnow()
         }
     ])
