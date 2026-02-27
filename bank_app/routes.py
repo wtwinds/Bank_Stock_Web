@@ -279,6 +279,21 @@ def api_pay():
 
     return jsonify({"status": "success"})
 
+# ---------------- API LOGIN ----------------
+@bank_bp.route("/api/login", methods=["POST"])
+def api_login():
+    data = request.json
+
+    user = current_app.bank_db.users.find_one({
+        "login_id": data.get("login_id"),
+        "password": data.get("password")
+    })
+
+    if not user:
+        return jsonify({"status": "error"})
+
+    return jsonify({"status": "success"})
+    
 # ---------------- LOGOUT ----------------
 @bank_bp.route("/logout")
 def logout():
