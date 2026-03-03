@@ -3,7 +3,16 @@ from bson import ObjectId
 from datetime import datetime
 from . import bank_bp
 from flask import jsonify
+from flask import send_file
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import pytz
 
+ist = pytz.timezone("Asia/Kolkata")
+
+def to_ist(dt):
+    return dt.replace(tzinfo=pytz.utc).astimezone(ist)
 
 # ---------------- LOGIN ----------------
 @bank_bp.route("/login", methods=["GET", "POST"])
@@ -57,8 +66,11 @@ def admin():
         ])
     )
 
+    # ✅ DATE FORMAT FIX
+    for t in transactions:
+        dt = to_ist(t["created_at"])
+        t["created_at"] = dt.strftime("%d/%m/%Y %I:%M %p")
     return render_template("admin_home.html", users=users, transactions=transactions)
-
 
 # ---------------- BRAVO ----------------
 @bank_bp.route("/bravo")
@@ -111,65 +123,254 @@ def statement():
         ).sort("created_at", -1)
     )
 
+    # ✅ FORMAT DATE FOR UI
+    for tx in data:
+        dt = to_ist(tx["created_at"])
+        tx["created_at"] = dt.strftime("%d/%m/%Y %I:%M %p")
+
     return render_template("statement.html", data=data)
 
+# ---------------- STATEMENT PDF ----------------
+@bank_bp.route("/statement/pdf")
+def download_statement_pdf():
+    from datetime import datetime
+
+    user_id = ObjectId(session["bank_user_id"])
+    user = current_app.bank_db.users.find_one({"_id": user_id})
+
+    transactions = list(
+        current_app.bank_db.transactions.find(
+            {"user_id": user_id}
+        ).sort("created_at", -1)
+    )
+
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=letter)
+
+    width, height = letter
+    y = height - 50
+
+    # -------- HEADER --------
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(170, y, "SmartPay Bank Statement")
+
+    # -------- USER DETAILS --------
+    y -= 35
+    p.setFont("Helvetica", 11)
+    p.drawString(50, y, f"Name: {user['login_id']}")
+    y -= 18
+    p.drawString(50, y, f"Account No: {user['account_no']}")
+    y -= 18
+    p.drawString(50, y, f"Role: {user['role']}")
+
+    # -------- TABLE HEADER --------
+    y -= 30
+    p.setFont("Helvetica-Bold", 11)
+    p.drawString(50, y, "Date")
+    p.drawString(170, y, "Amount")
+    p.drawString(260, y, "Type")
+    p.drawString(330, y, "Role")
+
+    y -= 8
+    p.line(50, y, 550, y)
+    y -= 18
+
+    # -------- TABLE DATA --------
+    p.setFont("Helvetica", 10)
+
+    for tx in transactions:
+        if y < 50:
+            p.showPage()
+            y = height - 50
+            p.setFont("Helvetica", 10)
+
+        # ✅ DATE FORMAT FIX (DD/MM/YYYY HH:MM)
+        dt = to_ist(tx["created_at"])
+        formatted_date = dt.strftime("%d/%m/%Y %I:%M %p")
+
+        p.drawString(50, y, formatted_date)
+        p.drawString(170, y, f"Rs {tx['amount']:.2f}")
+        p.drawString(260, y, tx["type"])
+        p.drawString(330, y, tx["role"])
+
+        y -= 18
+
+    p.save()
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name="SmartPay_Statement.pdf",
+        mimetype="application/pdf"
+    )
 
 # ---------------- GET ALPHA USER ----------------
-@bank_bp.route("/get-alpha-user")
-def get_alpha_user():
-    account_no = request.args.get("account_no")
+# @bank_bp.route("/get-alpha-user")
+# def get_alpha_user():
+#     account_no = request.args.get("account_no")
+
+#     user = current_app.bank_db.users.find_one({
+#         "account_no": account_no,
+#         "role": "ALPHA"
+#     })
+
+#     if user:
+#         return {
+#             "status": "success",
+#             "user_id": str(user["_id"]),
+#             "name": user["login_id"]
+#         }
+#     return {"status": "error"}
+
+# ---------------- GET USER BY NAME ----------------
+@bank_bp.route("/get-alpha-by-name")
+def get_alpha_by_name():
+    name = request.args.get("name")
 
     user = current_app.bank_db.users.find_one({
-        "account_no": account_no,
+        "login_id": name,
         "role": "ALPHA"
     })
 
     if user:
         return {
             "status": "success",
-            "user_id": str(user["_id"]),
-            "name": user["login_id"]
+            "account_no": user["account_no"],
+            "user_id": str(user["_id"])
         }
     return {"status": "error"}
-
 
 # ---------------- TRANSFER ----------------
 @bank_bp.route("/transfer", methods=["GET", "POST"])
 def transfer():
-    if session.get("bank_role") != "BRAVO":
+    if session.get("bank_role") not in ["BRAVO", "ADMIN"]:
         return redirect("/bank/login")
-
-    alpha_users = list(
-        current_app.bank_db.users.find({"role": "ALPHA"}, {"login_id": 1})
-    )
 
     if request.method == "POST":
         to_user_id = ObjectId(request.form["alpha_id"])
         amount = float(request.form["amount"])
-        bravo_id = ObjectId(session["bank_user_id"])
+        user_id = ObjectId(session["bank_user_id"])
 
-        bravo = current_app.bank_db.users.find_one({"_id": bravo_id})
+        user = current_app.bank_db.users.find_one({"_id": user_id})
 
-        if amount > bravo["balance"]:
+        if amount > user["balance"]:
             flash("Insufficient Balance", "danger")
             return redirect("/bank/transfer")
 
-        # debit bravo
+        # ❌ NO DEBIT HERE
+        # ❌ NO CREDIT HERE
+        # ❌ NO TRANSACTION HERE
+
+        # store pending payment
+        session["pending_transfer"] = {
+            "to_user_id": str(to_user_id),
+            "amount": amount
+        }
+
+        return redirect("/bank/enter-pin")
+
+    return render_template("transfer.html")
+# @bank_bp.route("/transfer", methods=["GET", "POST"])
+# def transfer():
+#     if session.get("bank_role") not in ["BRAVO", "ADMIN"]:
+#         return redirect("/bank/login")
+
+#     alpha_users = list(
+#         current_app.bank_db.users.find({"role": "ALPHA"}, {"login_id": 1})
+#     )
+
+#     if request.method == "POST":
+#         to_user_id = ObjectId(request.form["alpha_id"])
+#         amount = float(request.form["amount"])
+#         bravo_id = ObjectId(session["bank_user_id"])
+
+#         bravo = current_app.bank_db.users.find_one({"_id": bravo_id})
+
+#         if amount > bravo["balance"]:
+#             flash("Insufficient Balance", "danger")
+#             return redirect("/bank/transfer")
+
+#         # debit bravo
+#         current_app.bank_db.users.update_one(
+#             {"_id": bravo_id},
+#             {"$inc": {"balance": -amount}}
+#         )
+
+#         # credit alpha
+#         current_app.bank_db.users.update_one(
+#             {"_id": to_user_id},
+#             {"$inc": {"balance": amount}}
+#         )
+
+#         # transactions
+#         current_app.bank_db.transactions.insert_many([
+#             {
+#                 "user_id": bravo_id,
+#                 "amount": amount,
+#                 "type": "DEBIT",
+#                 "role": "BRAVO",
+#                 "created_at": datetime.utcnow()
+#             },
+#             {
+#                 "user_id": to_user_id,
+#                 "amount": amount,
+#                 "type": "CREDIT",
+#                 "role": "ALPHA",
+#                 "created_at": datetime.utcnow()
+#             }
+#         ])
+
+#         flash(f"₹ {amount} Debited Successfully", "danger")
+#         # return redirect("/bank/transfer-success")
+#         # store temp transfer in session
+#         session["pending_transfer"] = {
+#             "to_user_id": str(to_user_id),
+#             "amount": amount
+#         }
+
+#         return redirect("/bank/enter-pin")
+
+#     return render_template("transfer.html", alpha_user=alpha_users)
+
+# ---------------- ENTER PIN ----------------
+@bank_bp.route("/enter-pin", methods=["GET", "POST"])
+def enter_pin():
+    if "pending_transfer" not in session:
+        return redirect("/bank/transfer")
+
+    user_id = ObjectId(session["bank_user_id"])
+    user = current_app.bank_db.users.find_one({"_id": user_id})
+
+    if request.method == "POST":
+        entered_pin = request.form["pin"]
+
+        # ❌ wrong pin
+        if str(user.get("pin")) != str(entered_pin):
+            flash("Invalid PIN", "danger")
+            return redirect("/bank/enter-pin")
+
+        # ✅ correct pin → DO TRANSFER
+        data = session.pop("pending_transfer")
+        to_user_id = ObjectId(data["to_user_id"])
+        amount = float(data["amount"])
+
+        # debit
         current_app.bank_db.users.update_one(
-            {"_id": bravo_id},
+            {"_id": user_id},
             {"$inc": {"balance": -amount}}
         )
 
-        # credit alpha
+        # credit
         current_app.bank_db.users.update_one(
             {"_id": to_user_id},
             {"$inc": {"balance": amount}}
         )
 
-        # transactions
+        # transaction log
         current_app.bank_db.transactions.insert_many([
             {
-                "user_id": bravo_id,
+                "user_id": user_id,
                 "amount": amount,
                 "type": "DEBIT",
                 "role": "BRAVO",
@@ -184,11 +385,10 @@ def transfer():
             }
         ])
 
-        flash(f"₹ {amount} Debited Successfully", "danger")
+        flash("Payment Successful", "success")
         return redirect("/bank/transfer-success")
 
-    return render_template("transfer.html", alpha_user=alpha_users)
-
+    return render_template("enter_pin.html")
 
 # ---------------- TRANSFER SUCCESS ----------------
 @bank_bp.route("/transfer-success")
@@ -299,6 +499,3 @@ def api_login():
 def logout():
     session.clear()
     return redirect("/")
-
-
-

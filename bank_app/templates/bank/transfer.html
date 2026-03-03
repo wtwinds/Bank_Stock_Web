@@ -18,7 +18,7 @@
 
         <div class="card shadow">
             <div class="card-header bg-success text-white text-center">
-                Bravo - Pay Amount
+                {{ "Admin Transfer" if session.bank_role=="ADMIN" else "Bravo - Pay Amount" }}
             </div>
 
             <div class="card-body">
@@ -34,12 +34,12 @@
                 {% endwith %}
 
                 <form method="post">
-                    <label>Alpha Account Number</label>
-                    <input type="text" id="account_no" class="form-control mb-3" placeholder="Enter Alpha Account No"
+                    <label>Alpha Name</label>
+                    <input type="text" id="alpha_name" class="form-control mb-3" placeholder="Enter Alpha Name"
                         required>
 
-                    <label>Alpha Name</label>
-                    <input type="text" id="alpha_name" class="form-control mb-3" readonly>
+                    <label>Account Number</label>
+                    <input type="text" id="account_no" class="form-control mb-3" readonly>
 
                     <input type="hidden" name="alpha_id" id="alpha_id">
 
@@ -66,19 +66,19 @@
     </div>
 
     <script>
-        document.getElementById("account_no").addEventListener("blur", function () {
-            let accNo = this.value;
-            if (!accNo) return;
+        document.getElementById("alpha_name").addEventListener("blur", function () {
+            let name = this.value;
+            if (!name) return;
 
-            fetch(`/bank/get-alpha-user?account_no=${accNo}`)
+            fetch(`/bank/get-alpha-by-name?name=${name}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === "success") {
-                        document.getElementById("alpha_name").value = data.name;
+                        document.getElementById("account_no").value = data.account_no;
                         document.getElementById("alpha_id").value = data.user_id;
                     } else {
-                        alert("Invalid Alpha Account Number");
-                        document.getElementById("alpha_name").value = "";
+                        alert("Alpha user not found");
+                        document.getElementById("account_no").value = "";
                         document.getElementById("alpha_id").value = "";
                     }
                 });

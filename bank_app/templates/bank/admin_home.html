@@ -36,25 +36,31 @@
         </table>
 
         <h5 class="mt-4">All Transactions</h5>
-        <table class="table table-bordered table-sm">
-            <tr>
-                <th>User</th>
-                <th>Amount</th>
-                <th>Type</th>
-                <th>Role</th>
-                <th>Date</th>
-            </tr>
-            {% for t in transactions %}
-            <tr>
-                <td>{{ t.user.login_id }}</td>
-                <td>₹ {{ "%.2f"|format(t.amount) }}</td>
-                <td>{{ t.type }}</td>
-                <td>{{ t.role }}</td>
-                <td>{{ t.created_at }}</td>
-            </tr>
-            {% endfor %}
-        </table>
 
+        <div style="max-height: 350px; overflow-y: auto; border: 1px solid #ddd;">
+            <table class="table table-bordered table-sm mb-0">
+                <thead class="table-dark sticky-top">
+                    <tr>
+                        <th>User</th>
+                        <th>Amount</th>
+                        <th>Type</th>
+                        <th>Role</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in transactions %}
+                    <tr>
+                        <td>{{ t.user.login_id }}</td>
+                        <td>₹ {{ "%.2f"|format(t.amount) }}</td>
+                        <td>{{ t.type }}</td>
+                        <td>{{ t.role }}</td>
+                        <td>{{ t.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
 </body>
