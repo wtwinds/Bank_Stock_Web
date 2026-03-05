@@ -224,20 +224,21 @@ def download_statement_pdf():
 #     return {"status": "error"}
 
 # ---------------- GET USER BY NAME ----------------
-@bank_bp.route("/get-alpha-by-name")
-def get_alpha_by_name():
+@bank_bp.route("/get-user-by-name")
+def get_user_by_name():
     name = request.args.get("name")
 
     user = current_app.bank_db.users.find_one({
         "login_id": name,
-        "role": "ALPHA"
+        "role": {"$in": ["ALPHA", "BRAVO"]}
     })
 
     if user:
         return {
             "status": "success",
             "account_no": user["account_no"],
-            "user_id": str(user["_id"])
+            "user_id": str(user["_id"]),
+            "role": user["role"]
         }
     return {"status": "error"}
 
@@ -249,6 +250,9 @@ def transfer():
 
     if request.method == "POST":
         to_user_id = ObjectId(request.form["alpha_id"])
+        if str(to_user_id) == session["bank_user_id"]:
+            flash("You cannot transfer money to yourself", "danger")
+            return redirect("/bank/transfer")
         amount = float(request.form["amount"])
         user_id = ObjectId(session["bank_user_id"])
 
@@ -271,67 +275,7 @@ def transfer():
         return redirect("/bank/enter-pin")
 
     return render_template("transfer.html")
-# @bank_bp.route("/transfer", methods=["GET", "POST"])
-# def transfer():
-#     if session.get("bank_role") not in ["BRAVO", "ADMIN"]:
-#         return redirect("/bank/login")
 
-#     alpha_users = list(
-#         current_app.bank_db.users.find({"role": "ALPHA"}, {"login_id": 1})
-#     )
-
-#     if request.method == "POST":
-#         to_user_id = ObjectId(request.form["alpha_id"])
-#         amount = float(request.form["amount"])
-#         bravo_id = ObjectId(session["bank_user_id"])
-
-#         bravo = current_app.bank_db.users.find_one({"_id": bravo_id})
-
-#         if amount > bravo["balance"]:
-#             flash("Insufficient Balance", "danger")
-#             return redirect("/bank/transfer")
-
-#         # debit bravo
-#         current_app.bank_db.users.update_one(
-#             {"_id": bravo_id},
-#             {"$inc": {"balance": -amount}}
-#         )
-
-#         # credit alpha
-#         current_app.bank_db.users.update_one(
-#             {"_id": to_user_id},
-#             {"$inc": {"balance": amount}}
-#         )
-
-#         # transactions
-#         current_app.bank_db.transactions.insert_many([
-#             {
-#                 "user_id": bravo_id,
-#                 "amount": amount,
-#                 "type": "DEBIT",
-#                 "role": "BRAVO",
-#                 "created_at": datetime.utcnow()
-#             },
-#             {
-#                 "user_id": to_user_id,
-#                 "amount": amount,
-#                 "type": "CREDIT",
-#                 "role": "ALPHA",
-#                 "created_at": datetime.utcnow()
-#             }
-#         ])
-
-#         flash(f"₹ {amount} Debited Successfully", "danger")
-#         # return redirect("/bank/transfer-success")
-#         # store temp transfer in session
-#         session["pending_transfer"] = {
-#             "to_user_id": str(to_user_id),
-#             "amount": amount
-#         }
-
-#         return redirect("/bank/enter-pin")
-
-#     return render_template("transfer.html", alpha_user=alpha_users)
 
 # ---------------- ENTER PIN ----------------
 @bank_bp.route("/enter-pin", methods=["GET", "POST"])
@@ -367,20 +311,23 @@ def enter_pin():
             {"$inc": {"balance": amount}}
         )
 
+        #find receiver
+        to_user=current_app.bank_db.users.find_one({"_id": to_user_id})
+
         # transaction log
         current_app.bank_db.transactions.insert_many([
             {
                 "user_id": user_id,
                 "amount": amount,
                 "type": "DEBIT",
-                "role": "BRAVO",
+                "role": f"{user["role"]}_TRANSFER",
                 "created_at": datetime.utcnow()
             },
             {
                 "user_id": to_user_id,
                 "amount": amount,
                 "type": "CREDIT",
-                "role": "ALPHA",
+                "role": f"{to_user["role"]}_RECEIVED",
                 "created_at": datetime.utcnow()
             }
         ])

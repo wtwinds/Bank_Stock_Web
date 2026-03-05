@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <title>SmartPay Bank - Transfer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 
 <body class="bg-light">
@@ -34,14 +36,13 @@
                 {% endwith %}
 
                 <form method="post">
-                    <label>Alpha Name</label>
-                    <input type="text" id="alpha_name" class="form-control mb-3" placeholder="Enter Alpha Name"
-                        required>
+                    <label>Receiver Name</label>
+                    <input type="text" id="user_name" class="form-control mb-3" placeholder="Enter UserName" required>
 
                     <label>Account Number</label>
                     <input type="text" id="account_no" class="form-control mb-3" readonly>
 
-                    <input type="hidden" name="alpha_id" id="alpha_id">
+                    <input type="hidden" name="alpha_id" id="user_id">
 
                     <label>Enter Amount</label>
                     <input type="number" name="amount" class="form-control mb-4" required>
@@ -66,22 +67,31 @@
     </div>
 
     <script>
-        document.getElementById("alpha_name").addEventListener("blur", function () {
+        document.getElementById("user_name").addEventListener("blur", function () {
+
             let name = this.value;
             if (!name) return;
 
-            fetch(`/bank/get-alpha-by-name?name=${name}`)
+            fetch(`/bank/get-user-by-name?name=${name}`)
                 .then(res => res.json())
                 .then(data => {
+
                     if (data.status === "success") {
+
                         document.getElementById("account_no").value = data.account_no;
-                        document.getElementById("alpha_id").value = data.user_id;
+                        document.getElementById("user_id").value = data.user_id;
+
                     } else {
-                        alert("Alpha user not found");
+
+                        alert("User not found");
+
                         document.getElementById("account_no").value = "";
-                        document.getElementById("alpha_id").value = "";
+                        document.getElementById("user_id").value = "";
+
                     }
+
                 });
+
         });
     </script>
 
